@@ -1,0 +1,52 @@
+-----connect to snowflake account using SNOWSQL
+
+snowsql -c connection_name
+
+--create database
+CREATE DATABASE DBT;
+--create warehouse
+CREATE WAREHOUSE DBT_WH;
+--create schema
+CREATE SCHEMA DBT_SCHEMA;
+
+--create stage to park file temporarely 
+CREATE OR REPLACE STAGE DBT_STAGE;
+
+--create file format to support table creation from file
+CREATE OR REPLACE FILE FORMAT DBT_CSV_FORMAT 
+TYPE=CSV FIELD_DELIMITER=',' FIELD_OPTIONALLY_ENCLOSED_BY='"' PARSE_HEADER=TRUE ;
+
+
+SELECT COLUMN_NAME FROM TABLE(INFER_SCHEMA(
+ LOCATION=>'@dbt_stage/no_broker_house_sale.csv'
+ , FILE_FORMAT=>'DBT_CSV_FORMAT'));
+
+ SELECT COLUMN_NAME FROM TABLE(INFER_SCHEMA(
+ LOCATION=>'@dbt_stage/no_broker_house_rent.csv'
+ , FILE_FORMAT=>'DBT_CSV_FORMAT'));
+
+ --create table to create table from files
+CREATE OR REPLACE TABLE DBT.DBT_SCHEMA.house_sale_tbl USING TEMPLATE (
+SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) 
+ WITHIN GROUP (ORDER BY ORDER_ID)
+ FROM TABLE (INFER_SCHEMA(
+ LOCATION=>'@dbt_stage/no_broker_house_sale.csv',
+ FILE_FORMAT=>'DBT_CSV_FORMAT')));
+
+ CREATE OR REPLACE TABLE DBT.DBT_SCHEMA.house_rent_tbl USING TEMPLATE (
+SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) 
+ WITHIN GROUP (ORDER BY ORDER_ID)
+ FROM TABLE (INFER_SCHEMA(
+ LOCATION=>'@dbt_stage/no_broker_house_rent.csv',
+ FILE_FORMAT=>'DBT_CSV_FORMAT')));
+ 
+
+
+ --load data from stage to table
+ copy into DBT.DBT_SCHEMA.house_sale_tbl from @dbt_stage/no_broker_house_sale.csv file_format = (skip_header = 1);
+ copy into DBT.DBT_SCHEMA.house_rent_tbl from @dbt_stage/no_broker_house_rent.csv file_format = (skip_header = 1);
+
+
+
+ 
+ 

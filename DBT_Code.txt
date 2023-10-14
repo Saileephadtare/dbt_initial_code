@@ -1,0 +1,166 @@
+stg_rent_house.sql
+WITH RENT_RAW AS(
+SELECT 
+"NAME",
+CAST (REPLACE("HOUSE_RENT",',','') AS INTEGER) "HOUSE_RENT",
+CAST(REPLACE(TRANSLATE("AREA", 'SQ.FT',''),',','')  AS INTEGER) AS "AREA",
+CAST(REPLACE("DEPOSIT",',','') AS INTEGER) AS "DEPOSIT",
+"BEDROOM",
+"BATHROOM",
+CAST(REPLACE("BALCONY",'NA','0') AS INTEGER) AS "BALCONY",
+"BUILDING_AGE" AS "AGE OF BUILDING",
+TO_DATE(REPLACE("AVABILITY",'IMMEDIATELY',TO_VARCHAR(CURRENT_DATE(), 'DD-MON-YY')),'DD-MON-YY')AS "AVABILITY",
+"TENANT",
+"PARKING",
+"WATER_SUPPLIER",
+"FLOOR",
+"FURNITURE_STATUS",
+"FACING",
+REPLACE(REPLACE("GATE_SECURITY", 'TRUE', 'YES'), 'FALSE', 'NO') AS "GATED SECURITY",
+TO_DATE(REPLACE("AD_POSTED",'0023-','2023-')) AS "AD_POSTED"
+-- FROM DBT.DBT_SCHEMA.HOUSE_RENT_TBL
+FROM {{SOURCE('DBT_HOUSE','HOUSE_RENT_TBL')}}
+)
+SELECT *
+FROM RENT_RAW
+
+stg_sale_house.sql
+with sale_raw as(
+    select 
+
+"Name",
+CAST(CAST(REPLACE(REPLACE("House_Price",' Lacs','e5'), ' Crores','e7') AS DECIMAL(18,2)) AS INTEGER) AS "House_Price",
+cast(replace("Area",',','') as integer) as "Area",
+"Apartment_Name",
+"Bedroom",
+"Bathroom",
+"Balcony",
+"Age of Building",
+"Ownership Type" as "Ownership",
+
+TO_DATE(replace("Avability",'Immediately',TO_VARCHAR(CURRENT_DATE(), 'DD-Mon-YY')),'DD-Mon-YY')  as "Avability",
+cast(replace(replace("Maintenance Charges", 'per sq.ft/m',''),'NA','0') as decimal(3,1)) as "Maintenance Charges",
+"Floor",
+cast(replace(translate("Builtup Area", 'sq.ft',''),',','')  as integer) as "Builtup Area",
+cast(replace(replace(translate("Carpet Area", 'sq.ft',''),'NA','0'),',','') as integer) as "Carpet Area",
+"Parking",
+"Power_Supply",
+"Furnishing Status" as "Furniture",
+"Facing",
+REPLACE(REPLACE("Gated Security", 'true', 'YES'), 'false', 'NO') as "Gated Security",
+TO_DATE(replace("Ad_posted",'0023-','2023-')) as "Ad_posted"
+--from DBT.DBT_SCHEMA.HOUSE_SALE_TBL
+from {{source('dbt_house','HOUSE_SALE_TBL')}}
+)
+select *
+from sale_raw
+
+src
+version: 2
+
+sources:
+  - name: dbt_house 
+    database: DBT
+    schema: DBT_SCHEMA
+    tables:
+      - name: HOUSE_RENT_TBL
+      - name: HOUSE_SALE_TBL
+
+
+fct_sale.sql
+with furnish_home_sale as
+(
+    select * from {{ref("stg_sale_house")}}
+),
+furnish_status as(
+select 
+    s."Avability",
+    s."Apartment_Name",
+    s."Maintenance Charges"
+    from 
+    furnish_home_sale s 
+    where s."Furniture"='Semi'
+    order by s."Avability"
+   
+)
+select * from furnish_status
+
+fct_rent.sql
+with house_home_rent as
+(
+    select * from {{ref('stg_rent_house')}}
+),
+furnish_status as(
+select 
+    s."Avability",
+    s."Name",
+    s."Deposit" 
+    from 
+    house_home_rent s 
+    where s."Furniture_Status"='Semi'
+    )
+select * from furnish_status
+
+
+dim_sale.sql
+with sale_details as
+(
+    select * from {{ref('stg_sale_house')}}
+),
+sale_furniture_detail as(
+    select * from {{ref('fct_sale')}}
+    
+),
+overall_sale_data as
+(
+    select 
+    s."Apartment_Name",
+    s."Area",
+    s."Furniture",
+    s."House_Price",
+    s."Ownership",
+    s."Bedroom",
+    s."Bathroom",
+    s."Balcony",
+    s."Age of Building",
+    s."Parking",
+    s."Avability"
+    from sale_details s
+)
+select s.* ,t."Maintenance Charges",(s."Area"*t."Maintenance Charges") as "Maintenance_Charges_Per_Month"
+from overall_sale_data s 
+inner join sale_furniture_detail t using("Apartment_Name")
+
+
+dim_rent.sql
+with rent_details as
+(
+    select * from {{ref('stg_rent_house')}}
+),
+rent_furniture_detail as(
+    select * from {{ref('fct_rent')}}
+    
+),
+overall_rent_data as
+(
+    select 
+    s."Name",
+    s."Area",
+    s."House_Rent",
+    s."Tenant",
+    s."Bedroom",
+    s."Bathroom",
+    s."Balcony",
+    s."Age of Building",
+    s."Parking",
+    s."Avability"
+    from rent_details s
+)
+select s.* ,t."Deposit",sum(s."House_Rent"+t."Deposit") as "Charges_First_Month"
+from overall_rent_data s 
+inner join rent_furniture_detail t using("Name")
+group by 1,2,3,4,5,6,7,8,9,10,11
+
+
+
+
