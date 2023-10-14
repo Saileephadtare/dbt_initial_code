@@ -1,0 +1,19 @@
+Step 1- create models for clean and standardize data.
+Step 2- create sources in the project such as database,schem,table so if any of the value changes we dont need to go back to each script where its referenced and change it manually.
+step 3- There are two types of testing:-
+        1)Generic-Not_Null, Unique, accepted values, Relationships
+        2)Singular- we can write our own test under tests folder.
+step 4- documentation, Anyone will understand what is done in the transformations
+        1)add description :'description of the column' to the testing file   
+        2)create document block and referenced it in the testing file as "{{doc('document_name')}}"
+         {% docs document_name %}
+
+         ///// document block
+         {% enddocs %}  
+
+Execution command:-
+1)dbt run --select filename (create model)
+2)dbt test --select filename (test Singular file)
+3)dbt test  (runs all tests in the dbt project)
+4)dbt build (If tests fails then model not built) dbt test and dbt run together
+6)dbt docs generate (To generate documentation)
